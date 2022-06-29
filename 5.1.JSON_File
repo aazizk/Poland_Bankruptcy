@@ -1,0 +1,33 @@
+import gzip
+import json
+import pandas as pd
+
+# Open file and load JSON
+with open("data/poland-bankruptcy-data-2009.json", "r") as data_file:    
+    poland_data = json.load(data_file)
+df = pd.json_normalize(poland_data).reset_index(drop=True)
+print(type(poland_data))
+
+poland_data.keys()
+
+len(poland_data["data"])
+
+len(poland_data["data"][0])
+
+# Iterate through companies
+for item in poland_data['data']:
+    if len(item) != 66:
+        print("ALERT")
+
+df = pd.DataFrame().from_dict(poland_data_gz["data"]).set_index("company_id")
+
+    def wrangle(filename):
+    # Open file and load JSON
+    with gzip.open(filename, "r") as f:    
+        data = json.load(f)
+    df = pd.DataFrame().from_dict(data["data"]).set_index("company_id")
+    return df
+
+df = wrangle("data/poland-bankruptcy-data-2009.json.gz")
+print(df.shape)
+df.head()
