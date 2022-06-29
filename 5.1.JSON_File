@@ -18,6 +18,7 @@ len(poland_data["data"][0])
 for item in poland_data['data']:
     if len(item) != 66:
         print("ALERT")
+        
 
 df = pd.DataFrame().from_dict(poland_data_gz["data"]).set_index("company_id")
 
