@@ -15,3 +15,30 @@ from sklearn.pipeline import make_pipeline
 
 wqet_grader.init("Project 5 Assessment")
 
+def wrangle(filename):
+    # Open file and load JSON
+    with gzip.open(filename, "r") as data_file:    
+        data = json.load(data_file)
+    df = pd.DataFrame().from_dict(data["data"]).set_index("company_id")
+#print(type(poland_data))
+    return df
+
+df = wrangle("data/poland-bankruptcy-data-2009.json.gz")
+print(df.shape)
+df.head()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+print("X_train shape:", X_train.shape)
+print("y_train shape:", y_train.shape)
+print("X_test shape:", X_test.shape)
+print("y_test shape:", y_test.shape)
+
+over_sampler = RandomOverSampler(random_state=42)
+X_train_over, y_train_over = over_sampler.fit_resample(X_train, y_train)
+print("X_train_over shape:", X_train_over.shape)
+X_train_over.head()
+
+acc_baseline = y_train.value_counts(normalize=True).max()
+print("Baseline Accuracy:", round(acc_baseline, 4))
+
