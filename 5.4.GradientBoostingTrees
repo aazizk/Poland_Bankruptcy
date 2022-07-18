@@ -28,6 +28,10 @@ def wrangle(filename):
 
 df = wrangle("data/poland-bankruptcy-data-2009.json.gz")
 
+target = "bankrupt"
+X = df.drop(columns = target)
+y = df[target]
+
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 over_sampler = RandomOverSampler(random_state=42)
@@ -35,14 +39,12 @@ X_train_over, y_train_over = over_sampler.fit_resample(X_train, y_train)
 
 acc_baseline = y_train.value_counts(normalize=True).max()
 
-clf = make_pipeline(SimpleImputer(), RandomForestClassifier(random_state=42))
-
-cv_acc_scores = cross_val_score(clf, X_train_over, y_train_over, cv=5, n_jobs= -1)
+clf = make_pipeline(SimpleImputer(), GradientBoostingClassifier())
 
 params = {
     "simpleimputer__strategy": ["mean", "median"],
-    "randomforestclassifier__n_estimators": range(25, 100, 25),
-    "randomforestclassifier__max_depth": range(10,50,10)
+    "gradientboostingclassifier__n_estimators": range(20, 31, 5),
+    "gradientboostingclassifier__max_depth": range(2,5)
 }
 
 model = GridSearchCV(
@@ -53,58 +55,40 @@ model = GridSearchCV(
     verbose =1
 )
 
+model.fit(X_train_over, y_train_over)
+
 cv_results = pd.DataFrame(model.cv_results_)
-
-# Create mask
-mask = cv_results["param_randomforestclassifier__max_depth"] == 10
-# Plot fit time vs n_estimators
-plt.plot(
-    cv_results[mask]["param_randomforestclassifier__n_estimators"],
-    cv_results[mask]["mean_fit_time"]
-)
-# Label axes
-plt.xlabel("Number of Estimators")
-plt.ylabel("Mean Fit Time [seconds]")
-plt.title("Training Time vs Estimators (max_depth=10)");
-
-# Create mask
-mask = cv_results["param_randomforestclassifier__n_estimators"] == 25
-# Plot fit time vs max_depth
-plt.plot(
-    cv_results[mask]["param_randomforestclassifier__max_depth"],
-    cv_results[mask]["mean_fit_time"]
-)
-# Label axes
-plt.xlabel("Max Depth")
-plt.ylabel("Mean Fit Time [seconds]")
-plt.title("Training Time vs Max Depth (n_estimators=25)");
+results.sort_values("rank_test_score").head(10)
 
 model.best_params_
-model.best_score_
-model.best_estimator_
-model.predict(X_train_over)
 
 acc_train = model.score(X_train_over, y_train_over)
 acc_test = model.score(X_test, y_test)
 
-y_test.value_counts()
-
 ConfusionMatrixDisplay.from_estimator(model, X_test, y_test);
 
-# Get feature names from training data
-features = X_train_over.columns
-# Extract importances from model
-importances = model.best_estimator_.named_steps["randomforestclassifier"].feature_importances_
-# Create a series with feature names and importances
-feat_imp = pd.Series(importances, index = features).sort_values()
-# Plot 10 most important features
-feat_imp.tail(10).plot(kind="barh")
-plt.xlabel("Gini Importance")
-plt.ylabel("Feature")
-plt.title("Feature Importance");
+# Print classification report
+print(classification_report(y_test, model.predict(X_test)))
+
+def make_cnf_matrix(threshold):
+    y_pred_proba = model.predict_proba(X_test)[:, -1]
+    y_pred = y_pred_proba > threshold
+    conf_matrix=confusion_matrix(y_test, y_pred)
+    tn, fp, fn, tp = conf_matrix.ravel()
+    print(f"Profit: €{tp*100_000_000}")
+    print(f"Lossers: €{fp*250_000_000}")
+    print(f"Total: €{tp*100_000_000 - fp*250_000_000 }")
+    ConfusionMatrixDisplay.from_predictions(y_test, y_pred, colorbar=False)
+    pass
+
+
+thresh_widget = widgets.FloatSlider(min=0, max=1, value=0.5, step=0.05)
+
+interact(make_cnf_matrix, threshold=thresh_widget);
+
 
 # Save model
-with open("model-5-3.pkl", "wb") as f:
+with open("model-5-4.pkl", "wb") as f:
     pickle.dump(model, f)
 
 def make_predictions(data_filepath, model_filepath):
