@@ -1,0 +1,130 @@
+import gzip
+import json
+import pickle
+
+import ipywidgets as widgets
+import pandas as pd
+import wqet_grader
+from imblearn.over_sampling import RandomOverSampler
+from IPython.display import VimeoVideo
+from ipywidgets import interact
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    classification_report,
+    confusion_matrix,
+)
+from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.pipeline import make_pipeline
+from teaching_tools.widgets import ConfusionMatrixWidget
+
+# Load data file
+with gzip.open("data/taiwan-bankruptcy-data.json.gz", "rb") as f:
+    taiwan_data = json.load(f)
+
+taiwan_data['schema']
+n_companies = len(taiwan_data["observations"])
+n_features = len(taiwan_data["observations"][0])
+
+# Create wrangle function
+def wrangle(filename):
+    with gzip.open("data/taiwan-bankruptcy-data.json.gz", "r") as f:
+        taiwan_data = json.load(f)
+    df=pd.DataFrame().from_dict(taiwan_data["observations"]).set_index("id")
+    return df
+
+df = wrangle("data/taiwan-bankruptcy-data.json.gz")
+
+# to check in any column has "NaN" value
+nans_by_col = pd.Series(df.isna().sum(), index = df.columns.values)
+print("nans_by_col shape:", nans_by_col.shape)
+nans_by_col.head()
+
+# Plot class balance
+df["bankrupt"].value_counts(normalize = True).plot(
+    kind = "bar",
+    xlabel="Bankrupt",
+    ylabel = "Frequency",
+    title = "Class Balance"
+);
+
+target = "bankrupt"
+X = df.drop(columns = target)
+y = df[target]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+over_sampler = RandomOverSampler(random_state=42)
+X_train_over, y_train_over = over_sampler.fit_resample(X_train, y_train)
+
+acc_baseline = y_train.value_counts(normalize=True).max()
+
+clf = GradientBoostingClassifier())
+
+cv_scores = cross_val_score(clf, X_train_over, y_train_over, cv=5, n_jobs= -1)
+
+params = {
+    "n_estimators": range(20, 31, 5),
+    "max_depth": range(2,5)
+}
+
+model = GridSearchCV(
+    clf,
+    param_grid = params,
+    cv=5,
+    n_jobs = -1,
+    verbose =1
+)
+
+model.fit(X_train_over, y_train_over)
+
+cv_results = pd.DataFrame(model.cv_results_)
+results.sort_values("rank_test_score").head(10)
+
+model.best_params_
+
+acc_train = model.score(X_train_over, y_train_over)
+acc_test = model.score(X_test, y_test)
+
+ConfusionMatrixDisplay.from_estimator(model, X_test, y_test);
+
+# Print classification report
+print(classification_report(y_test, model.predict(X_test)))
+
+# Get feature names from training data
+features = X_train_over.columns
+# Extract importances from model
+importances = model.best_estimator_.feature_importances_
+# Create a series with feature names and importances
+feat_imp = pd.Series(importances, index = features).sort_values()
+# Plot 10 most important features
+feat_imp.tail(10).plot(kind="barh")
+plt.xlabel("Gini Importance")
+plt.ylabel("Feature")
+plt.title("Feature Importance");
+
+# Save model
+with open("model-5-5.pkl", "wb") as f:
+    pickle.dump(model, f)
+
+def make_predictions(data_filepath, model_filepath):
+    # Wrangle JSON file
+    X_test = wrangle(data_filepath)
+    # Load model
+    with open(model_filepath, "rb") as f:
+        model = pickle.load(f)
+    # Generate predictions
+    y_test_pred = model.predict(X_test)
+    # Put predictions into Series with name "bankrupt", and same index as X_test
+    y_test_pred = pd.Series(y_test_pred, index=X_test.index, name= "bankrupt")
+    return y_test_pred
+
+y_test_pred = make_predictions(
+    data_filepath="data/poland-bankruptcy-data-2009-mvp-features.json.gz",
+    model_filepath="model-5-3.pkl",
+)
+
+print("predictions shape:", y_test_pred.shape)
+y_test_pred.head()
+
